@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ParkChennai — My Bookings</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <a class="nav-logo" href="dashboard.html">🅿 Park<span>Chennai</span></a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Locations</a></li>
+      <li><a href="history.html" class="active">My Bookings</a></li>
+      <li><a href="#" onclick="logout(); return false;" class="btn-nav">Logout</a></li>
+    </ul>
+    <div class="nav-user">Hi, <strong id="nav-user-name"></strong></div>
+  </nav>
+
+  <div class="page">
+    <div class="page-header">
+      <h1>My <em>Bookings</em></h1>
+      <p>Your complete parking history</p>
+    </div>
+
+    <div id="history-container">
+      <div class="loader"></div>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script>
+    Auth.requireAuth();
+    renderNavUser();
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+    }
+
+    async function loadHistory() {
+      const container = document.getElementById('history-container');
+      try {
+        const bookings = await API.get('/bookings/history');
+
+        if (!bookings.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">📋</div>
+              <h3>No bookings yet</h3>
+              <p>Your parking history will appear here.</p>
+              <a href="dashboard.html" class="btn btn-ghost" style="margin-top:1.5rem;display:inline-flex">Browse Locations</a>
+            </div>`;
+          return;
+        }
+
+        const totalSpent = bookings.reduce((sum, b) => sum + parseFloat(b.total_amount), 0);
+        const totalHours = bookings.reduce((sum, b) => sum + b.hours, 0);
+
+        container.innerHTML = `
+          <!-- SUMMARY -->
+          <div style="display:flex;gap:1rem;margin-bottom:2rem;flex-wrap:wrap">
+            <div class="summary-stat">
+              <span class="val">${bookings.length}</span>
+              <span class="lbl">Total Bookings</span>
+            </div>
+            <div class="summary-stat">
+              <span class="val">${totalHours}h</span>
+              <span class="lbl">Total Hours Parked</span>
+            </div>
+            <div class="summary-stat">
+              <span class="val">₹${totalSpent.toFixed(0)}</span>
+              <span class="lbl">Total Amount Spent</span>
+            </div>
+          </div>
+
+          <!-- TABLE -->
+          <div class="form-card" style="padding:0;overflow:hidden">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Location</th>
+                  <th>Slot</th>
+                  <th>Hours</th>
+                  <th>Amount</th>
+                  <th>Booked At</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bookings.map((b, i) => `
+                  <tr>
+                    <td style="color:var(--muted);font-size:0.8rem">${i + 1}</td>
+                    <td>
+                      <div style="font-weight:500;font-size:0.9rem">${b.location_name}</div>
+                      <div style="font-size:0.75rem;color:var(--muted)">${b.address}</div>
+                    </td>
+                    <td><span class="badge-slot">${b.slot_number}</span></td>
+                    <td>${b.hours} hr${b.hours > 1 ? 's' : ''}</td>
+                    <td style="color:var(--accent2);font-family:'Syne',sans-serif;font-weight:700">₹${parseFloat(b.total_amount).toFixed(2)}</td>
+                    <td style="color:var(--muted);font-size:0.8rem">${formatDate(b.booked_at)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } catch (err) {
+        showToast(err.message, 'error');
+        container.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>Failed to load history</h3><p>${err.message}</p></div>`;
+      }
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>

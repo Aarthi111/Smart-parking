@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ParkChennai — Verify Email</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .otp-inputs { display:flex; gap:10px; justify-content:center; margin:1.5rem 0; }
+    .otp-input {
+      width:52px; height:60px; text-align:center;
+      font-family:'Syne',sans-serif; font-size:1.5rem; font-weight:700;
+      background:var(--surface); border:1.5px solid var(--border);
+      border-radius:10px; color:var(--text); outline:none;
+      transition:border-color 0.2s, box-shadow 0.2s;
+    }
+    .otp-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(245,166,35,0.12); }
+    .otp-input.filled { border-color:var(--accent); }
+    .timer { text-align:center; color:var(--muted); font-size:0.85rem; margin-bottom:1rem; }
+    .timer span { color:var(--accent2); font-weight:600; }
+    .resend-btn { background:none; border:none; color:var(--accent2); cursor:pointer; font-size:0.85rem; font-weight:500; text-decoration:underline; }
+    .resend-btn:disabled { color:var(--muted); text-decoration:none; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+<div class="auth-glow"></div>
+<div class="auth-wrapper">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="logo-mark">📧</div>
+      <h1>Verify <span style="color:var(--accent)">Email</span></h1>
+      <p id="subtitle">Enter the 6-digit code sent to your email</p>
+    </div>
+
+    <div class="otp-inputs">
+      <input class="otp-input" type="text" maxlength="1" id="o1" inputmode="numeric"/>
+      <input class="otp-input" type="text" maxlength="1" id="o2" inputmode="numeric"/>
+      <input class="otp-input" type="text" maxlength="1" id="o3" inputmode="numeric"/>
+      <input class="otp-input" type="text" maxlength="1" id="o4" inputmode="numeric"/>
+      <input class="otp-input" type="text" maxlength="1" id="o5" inputmode="numeric"/>
+      <input class="otp-input" type="text" maxlength="1" id="o6" inputmode="numeric"/>
+    </div>
+
+    <div class="timer">
+      Code expires in <span id="timer-display">10:00</span>
+    </div>
+
+    <button class="btn btn-primary" id="verify-btn" onclick="handleVerify()" disabled>Verify Email</button>
+
+    <div class="auth-divider" style="margin-top:1rem">
+      Didn't receive the code?
+      <button class="resend-btn" id="resend-btn" onclick="handleResend()" disabled>Resend OTP</button>
+    </div>
+    <div class="auth-divider">
+      <a href="signup.html" style="color:var(--muted)">← Back to signup</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const userId = params.get('userId');
+  const email  = params.get('email');
+
+  if (!userId) window.location.href = '/signup.html';
+
+  document.getElementById('subtitle').textContent =
+    `Enter the 6-digit code sent to ${email || 'your email'}`;
+
+  // ── OTP input auto-advance ────────────────────────────
+  const inputs = Array.from({length:6}, (_,i) => document.getElementById(`o${i+1}`));
+
+  inputs.forEach((inp, idx) => {
+    inp.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val;
+      if (val) {
+        inp.classList.add('filled');
+        if (idx < 5) inputs[idx + 1].focus();
+      } else {
+        inp.classList.remove('filled');
+      }
+      checkComplete();
+    });
+
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !inp.value && idx > 0) {
+        inputs[idx - 1].focus();
+        inputs[idx - 1].value = '';
+        inputs[idx - 1].classList.remove('filled');
+      }
+      if (e.key === 'Enter') handleVerify();
+    });
+
+    inp.addEventListener('paste', (e) => {
+      const pasted = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+      if (pasted.length === 6) {
+        pasted.split('').forEach((c, i) => {
+          inputs[i].value = c;
+          inputs[i].classList.add('filled');
+        });
+        inputs[5].focus();
+        checkComplete();
+        e.preventDefault();
+      }
+    });
+  });
+
+  inputs[0].focus();
+
+  function checkComplete() {
+    const otp = inputs.map(i => i.value).join('');
+    document.getElementById('verify-btn').disabled = otp.length < 6;
+  }
+
+  function getOTP() { return inputs.map(i => i.value).join(''); }
+
+  // ── Countdown timer ───────────────────────────────────
+  let secondsLeft = 600; // 10 minutes
+  let resendEnabled = false;
+
+  const timerInterval = setInterval(() => {
+    secondsLeft--;
+    const m = Math.floor(secondsLeft / 60);
+    const s = secondsLeft % 60;
+    document.getElementById('timer-display').textContent =
+      `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      document.getElementById('timer-display').textContent = 'Expired';
+      document.getElementById('verify-btn').disabled = true;
+      showToast('OTP expired. Please request a new one.', 'error');
+    }
+
+    // Enable resend after 60 seconds
+    if (secondsLeft <= 540 && !resendEnabled) {
+      resendEnabled = true;
+      document.getElementById('resend-btn').disabled = false;
+    }
+  }, 1000);
+
+  // ── Verify ────────────────────────────────────────────
+  async function handleVerify() {
+    const otp = getOTP();
+    if (otp.length < 6) return showToast('Enter the complete 6-digit code.', 'error');
+
+    const btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+
+    try {
+      const data = await API.post('/auth/verify-otp', { userId: parseInt(userId), otp });
+      Auth.setAccessToken(data.accessToken);
+      Auth.setUser(data.user);
+      showToast(`Welcome, ${data.user.name}! 🎉`, 'success', 2000);
+      setTimeout(() => window.location.href = '/dashboard.html', 1000);
+    } catch (err) {
+      showToast(err.message, 'error');
+      // Shake the inputs on error
+      inputs.forEach(i => { i.style.borderColor = 'var(--red)'; });
+      setTimeout(() => inputs.forEach(i => { i.style.borderColor = ''; }), 1500);
+      btn.disabled = false;
+      btn.textContent = 'Verify Email';
+    }
+  }
+
+  // ── Resend ────────────────────────────────────────────
+  async function handleResend() {
+    const btn = document.getElementById('resend-btn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      await API.post('/auth/resend-otp', { userId: parseInt(userId) });
+      showToast('New OTP sent to your email!', 'success');
+      // Reset timer
+      secondsLeft = 600;
+      inputs.forEach(i => { i.value = ''; i.classList.remove('filled'); });
+      inputs[0].focus();
+      document.getElementById('verify-btn').disabled = true;
+      resendEnabled = false;
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Resend OTP'; }, 60000);
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Resend OTP';
+    }
+  }
+</script>
+</body>
+</html>

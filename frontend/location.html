@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ParkChennai — Book a Slot</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <a class="nav-logo" href="dashboard.html">🅿 Park<span>Chennai</span></a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Locations</a></li>
+      <li><a href="history.html">My Bookings</a></li>
+      <li><a href="#" onclick="logout(); return false;" class="btn-nav">Logout</a></li>
+    </ul>
+    <div class="nav-user">Hi, <strong id="nav-user-name"></strong></div>
+  </nav>
+
+  <div class="page" id="page-content">
+    <div class="loader"></div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script>
+    Auth.requireAuth();
+    renderNavUser();
+
+    const params = new URLSearchParams(window.location.search);
+    const locationId = params.get('id');
+
+    if (!locationId) window.location.href = '/dashboard.html';
+
+    let locationData = null;
+    let pricePerHour = 0;
+
+    async function loadLocation() {
+      try {
+        locationData = await API.get(`/locations/${locationId}`);
+        pricePerHour = parseFloat(locationData.price_per_hour);
+        renderPage(locationData);
+      } catch (err) {
+        showToast(err.message, 'error');
+        document.getElementById('page-content').innerHTML =
+          `<a class="back-link" href="dashboard.html">← Back</a>
+           <div class="empty-state"><div class="icon">⚠️</div><h3>${err.message}</h3></div>`;
+      }
+    }
+
+    function renderSlotGrid(slots) {
+      return slots.map(s => `
+        <div class="slot-badge ${s.is_occupied ? 'occupied' : 'free'}" title="${s.is_occupied ? 'Occupied' : 'Free'}">
+          ${s.slot_number}
+        </div>
+      `).join('');
+    }
+
+    function renderPage(loc) {
+      const freeSlots = loc.slots.filter(s => !s.is_occupied);
+      const occupiedSlots = loc.slots.filter(s => s.is_occupied);
+
+      document.getElementById('page-content').innerHTML = `
+        <a class="back-link" href="dashboard.html">← Back to locations</a>
+
+        <!-- HERO -->
+        <div class="detail-hero">
+          <h1>${loc.name}</h1>
+          <div class="address">📍 ${loc.address}</div>
+          <div class="detail-stats">
+            <div class="detail-stat green">
+              <span class="val">${loc.free_slots}</span>
+              <span class="lbl">Free Slots</span>
+            </div>
+            <div class="detail-stat red">
+              <span class="val">${loc.occupied_slots}</span>
+              <span class="lbl">Occupied</span>
+            </div>
+            <div class="detail-stat amber">
+              <span class="val">₹${parseFloat(loc.price_per_hour).toFixed(0)}</span>
+              <span class="lbl">Per Hour</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLOT VISUAL MAP -->
+        <div class="form-card" style="margin-bottom:1.5rem">
+          <h2>🗺️ Slot Map</h2>
+          <div style="display:flex;gap:1.5rem;margin-bottom:1rem;font-size:0.8rem;color:var(--muted)">
+            <span style="color:var(--green)">■ Free (${loc.free_slots})</span>
+            <span style="color:var(--border)">■ Occupied (${loc.occupied_slots})</span>
+          </div>
+          <div class="slot-grid">
+            ${renderSlotGrid(loc.slots)}
+          </div>
+        </div>
+
+        <!-- BOOKING FORM -->
+        <div class="detail-grid">
+          <div class="form-card">
+            <h2>📋 Book a Slot</h2>
+
+            ${freeSlots.length === 0 ? `
+              <div class="empty-state" style="padding:2rem 0">
+                <div class="icon">🚫</div>
+                <h3>All Slots Full</h3>
+                <p>Please check back later or try another location.</p>
+              </div>
+            ` : `
+              <div class="form-group">
+                <label>Select Slot</label>
+                <select id="slot-select" onchange="updateAmount()">
+                  <option value="">— Choose a free slot —</option>
+                  ${freeSlots.map(s => `<option value="${s.id}">${s.slot_number}</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Number of Hours</label>
+                <input
+                  type="number"
+                  id="hours-input"
+                  min="1"
+                  max="24"
+                  placeholder="e.g. 2"
+                  oninput="updateAmount()"
+                />
+              </div>
+
+              <div class="amount-preview" id="amount-preview" style="display:none">
+                <div>
+                  <div class="label">Total Amount</div>
+                  <div style="font-size:0.75rem;color:var(--muted)" id="amount-breakdown"></div>
+                </div>
+                <div class="amount" id="amount-value">₹0</div>
+              </div>
+
+              <button class="btn btn-primary" id="book-btn" onclick="handleBook()" disabled>
+                Confirm Booking
+              </button>
+            `}
+          </div>
+
+          <!-- PRICING INFO -->
+          <div class="form-card">
+            <h2>ℹ️ Pricing Details</h2>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem">
+              <div style="display:flex;justify-content:space-between;padding:0.75rem;background:var(--surface);border-radius:8px">
+                <span style="color:var(--muted);font-size:0.875rem">Rate</span>
+                <span style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent)">₹${parseFloat(loc.price_per_hour).toFixed(0)} / hr</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:0.75rem;background:var(--surface);border-radius:8px">
+                <span style="color:var(--muted);font-size:0.875rem">Total Slots</span>
+                <span style="font-weight:500">${loc.total_slots}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:0.75rem;background:var(--surface);border-radius:8px">
+                <span style="color:var(--muted);font-size:0.875rem">Available Now</span>
+                <span style="font-weight:500;color:var(--green)">${loc.free_slots}</span>
+              </div>
+            </div>
+            <div style="margin-top:1.25rem;padding:1rem;background:rgba(245,166,35,0.06);border-radius:10px;border:1px solid rgba(245,166,35,0.15)">
+             
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateAmount() {
+      const slotId = document.getElementById('slot-select')?.value;
+      const hours  = parseInt(document.getElementById('hours-input')?.value);
+      const btn    = document.getElementById('book-btn');
+      const preview = document.getElementById('amount-preview');
+      const amountEl = document.getElementById('amount-value');
+      const breakdownEl = document.getElementById('amount-breakdown');
+
+      if (slotId && hours >= 1) {
+        const total = pricePerHour * hours;
+        amountEl.textContent = `₹${total.toFixed(2)}`;
+        breakdownEl.textContent = `₹${pricePerHour} × ${hours} hr${hours > 1 ? 's' : ''}`;
+        preview.style.display = 'flex';
+        btn.disabled = false;
+      } else {
+        preview.style.display = 'none';
+        btn.disabled = true;
+      }
+    }
+
+    async function handleBook() {
+      const slotId = parseInt(document.getElementById('slot-select').value);
+      const hours  = parseInt(document.getElementById('hours-input').value);
+      const btn    = document.getElementById('book-btn');
+
+      if (!slotId || !hours || hours < 1) {
+        showToast('Please select a slot and enter hours.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Processing…';
+
+      try {
+        const data = await API.post('/bookings', {
+          slot_id: slotId,
+          location_id: parseInt(locationId),
+          hours,
+        });
+
+        showToast(`✓ Slot ${data.booking.slot_number} booked! ₹${data.booking.total_amount}`, 'success', 5000);
+
+        // Reload page to show updated slot map
+        setTimeout(() => loadLocation(), 1000);
+      } catch (err) {
+        if (err.message.includes('just booked')) {
+          showToast('⚡ ' + err.message + ' Please pick another slot.', 'error', 5000);
+          setTimeout(() => loadLocation(), 1200); // Refresh slot map
+        } else {
+          showToast(err.message, 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
+      }
+    }
+
+    loadLocation();
+  </script>
+</body>
+</html>
