@@ -9,7 +9,7 @@ router.post('/', auth, async (req, res) => {
   const user_id = req.user.id;
 
   if (!slot_id || !location_id || !hours || hours < 1)
-    return res.status(400).json({ error: 'slot_id, location_id, and hours (min 1) are required.' });  
+    return res.status(400).json({ error: 'slot_id, location_id, and hours (minimum 1) are required.' });  
 
   // Get a dedicated connection for the transaction
   const conn = await pool.getConnection();

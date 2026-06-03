@@ -130,3 +130,15 @@ INSERT INTO slots (location_id, slot_number) VALUES
 (10,'J11'),(10,'J12'),(10,'J13'),(10,'J14'),(10,'J15'),
 (10,'J16'),(10,'J17'),(10,'J18'),(10,'J19'),(10,'J20'),
 (10,'J21'),(10,'J22');
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_slots_location ON slots(location_id);
+CREATE INDEX idx_slots_status ON slots(status);
+CREATE INDEX idx_slots_location_status ON slots(location_id, status);
+CREATE INDEX idx_bookings_user ON bookings(user_id);
+create index idx_bookings_slot ON bookings(slot_id);
+create index idx_bookings_status ON bookings(status);
+create index idx_bookings_created ON bookings(created_at);
+create index idx_payments_booking ON payments(booking_id);
+CREATE INDEX idx_payments_razorpay ON payments(razorpay_order_id);
+CREATE INDEX idx_payments_status ON payments(status);
